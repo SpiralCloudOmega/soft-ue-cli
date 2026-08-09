@@ -194,8 +194,9 @@ Skills are **markdown files** at `cli/soft_ue_cli/skills/*.md`, shipped as packa
 ### Creative App Harness
 
 The dependency-free harness foundation catalogs structured Unreal, Blender, and Unity MCP
-adapters alongside Cua computer use and LongHorizon orchestration. It only validates configuration
-and reports readiness; it never starts external applications or agents.
+adapters alongside Cua Driver's MCP transport for visual computer use and LongHorizon
+orchestration. It only validates configuration and reports readiness; it never starts external
+applications or agents.
 
 ```bash
 soft-ue-cli harness init
@@ -205,8 +206,10 @@ soft-ue-cli harness serve --open-browser
 ```
 
 The default manifest is `.soft-app-harness/harness.json`. External adapters are disabled until
-configured. `mcp-config` includes enabled MCP adapters only, while the local dashboard binds to
-`127.0.0.1` and exposes read-only manifest/status views. See
+configured. Cua Driver's disabled entry includes the `cua-driver mcp` command template.
+`mcp-config` includes every enabled MCP transport, including Cua Driver, but excludes
+orchestrators. The local dashboard binds to `127.0.0.1` and exposes read-only manifest/status
+views. See
 `soft-ue-cli skills get creative-app-harness` for the structured-MCP-first
 Manager/Executor/Auditor workflow.
 

@@ -13,7 +13,7 @@ from collections.abc import Callable, Mapping
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path, PureWindowsPath
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlunsplit
 
 
 MANIFEST_SCHEMA = "soft-ue.app-harness.manifest.v1"
@@ -25,7 +25,8 @@ MAX_MANIFEST_BYTES = 1_048_576
 
 _ID_RE = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
 _CAPABILITY_ACCESS = {"read", "read-write", "orchestrate"}
-_ADAPTER_KINDS = {"mcp", "computer-use"}
+_ADAPTER_KINDS = {"mcp"}
+_LEGACY_CUA_KIND = "computer-use"
 _CONFIG_KEYS = {"command", "args", "env", "url", "required_paths"}
 _PROVENANCE_KEYS = {"source", "reference_url"}
 _CAPABILITY_KEYS = {"id", "description", "access"}
@@ -110,7 +111,7 @@ def default_manifest() -> dict[str, Any]:
             {
                 "id": "cua-driver",
                 "name": "Cua Driver computer use",
-                "kind": "computer-use",
+                "kind": "mcp",
                 "enabled": False,
                 "capabilities": [
                     _capability(
@@ -123,7 +124,10 @@ def default_manifest() -> dict[str, Any]:
                     "source": "external",
                     "reference_url": "https://github.com/trycua/cua",
                 },
-                "config": {},
+                "config": {
+                    "command": "cua-driver",
+                    "args": ["mcp"],
+                },
             },
         ],
         "orchestration": {
@@ -228,23 +232,21 @@ def _validate_string_list(value: Any, location: str) -> None:
 def _validate_config(value: Any, location: str, *, enabled: bool, kind: str) -> None:
     config = _expect_object(value, location)
     _reject_unknown(config, _CONFIG_KEYS, location)
-    command = config.get("command")
-    url = config.get("url")
-    if command is not None:
-        _expect_string(command, f"{location}.command")
-    if url is not None:
-        _validate_url(url, f"{location}.url")
-    if command is not None and url is not None:
+    has_command = "command" in config
+    has_url = "url" in config
+    command = _expect_string(config["command"], f"{location}.command") if has_command else None
+    url = _validate_url(config["url"], f"{location}.url") if has_url else None
+    if has_command and has_url:
         raise ManifestError(f"{location} cannot contain both command and url")
     if "args" in config:
         _validate_string_list(config["args"], f"{location}.args")
-        if command is None:
+        if not has_command:
             raise ManifestError(f"{location}.args requires command")
     if "required_paths" in config:
         _validate_string_list(config["required_paths"], f"{location}.required_paths")
     if "env" in config:
         env = _expect_object(config["env"], f"{location}.env")
-        if command is None:
+        if not has_command:
             raise ManifestError(f"{location}.env requires command")
         for key, env_value in env.items():
             _expect_string(key, f"{location}.env key")
@@ -272,9 +274,18 @@ def _validate_inventory_item(
     _expect_string(item["name"], f"{location}.name")
     if not isinstance(item["enabled"], bool):
         raise ManifestError(f"{location}.enabled must be a boolean")
-    expected_kinds = {"orchestrator"} if orchestrator else _ADAPTER_KINDS
-    if item["kind"] not in expected_kinds:
-        raise ManifestError(f"{location}.kind must be one of: {', '.join(sorted(expected_kinds))}")
+    kind = _expect_string(item["kind"], f"{location}.kind")
+    if orchestrator:
+        if kind != "orchestrator":
+            raise ManifestError(f"{location}.kind must be orchestrator")
+    elif kind == _LEGACY_CUA_KIND:
+        if identifier != "cua-driver":
+            raise ManifestError(
+                f"{location}.kind computer-use is only supported for the legacy cua-driver entry"
+            )
+        item["kind"] = "mcp"
+    elif kind not in _ADAPTER_KINDS:
+        raise ManifestError(f"{location}.kind must be mcp")
     _validate_capabilities(item["capabilities"], f"{location}.capabilities")
     _validate_provenance(item["provenance"], f"{location}.provenance")
     _validate_config(
@@ -292,7 +303,7 @@ def _validate_inventory_item(
 
 
 def validate_manifest(manifest: Any) -> dict[str, Any]:
-    """Strictly validate and return a defensive copy of a manifest."""
+    """Strictly validate and return a normalized defensive copy of a manifest."""
     root = _expect_object(manifest, "manifest")
     _reject_unknown(root, {"schema", "version", "adapters", "orchestration"}, "manifest")
     if set(root) != {"schema", "version", "adapters", "orchestration"}:
@@ -301,7 +312,8 @@ def validate_manifest(manifest: Any) -> dict[str, Any]:
         raise ManifestError(f"unsupported manifest schema/version; expected {MANIFEST_SCHEMA} version 1")
     if not isinstance(root["adapters"], list):
         raise ManifestError("manifest.adapters must be an array")
-    orchestration = _expect_object(root["orchestration"], "manifest.orchestration")
+    checked = copy.deepcopy(root)
+    orchestration = _expect_object(checked["orchestration"], "manifest.orchestration")
     _reject_unknown(orchestration, {"strategy", "orchestrators"}, "manifest.orchestration")
     if set(orchestration) != {"strategy", "orchestrators"}:
         raise ManifestError("manifest.orchestration requires strategy and orchestrators")
@@ -310,7 +322,7 @@ def validate_manifest(manifest: Any) -> dict[str, Any]:
         raise ManifestError("manifest.orchestration.orchestrators must be an array")
 
     identifiers: set[str] = set()
-    for index, adapter in enumerate(root["adapters"]):
+    for index, adapter in enumerate(checked["adapters"]):
         identifier = _validate_inventory_item(adapter, f"manifest.adapters[{index}]", orchestrator=False)
         if identifier in identifiers:
             raise ManifestError(f"duplicate inventory id: {identifier}")
@@ -324,7 +336,7 @@ def validate_manifest(manifest: Any) -> dict[str, Any]:
         if identifier in identifiers:
             raise ManifestError(f"duplicate inventory id: {identifier}")
         identifiers.add(identifier)
-    return copy.deepcopy(root)
+    return checked
 
 
 def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -407,14 +419,20 @@ def generate_mcp_config(manifest: Mapping[str, Any]) -> dict[str, Any]:
             continue
         config = adapter["config"]
         server: dict[str, Any] = {}
-        if "command" in config:
-            server["command"] = config["command"]
+        command = config.get("command")
+        url = config.get("url")
+        if isinstance(command, str) and command.strip():
+            server["command"] = command
             if "args" in config:
                 server["args"] = list(config["args"])
             if "env" in config:
                 server["env"] = dict(config["env"])
+        elif isinstance(url, str) and url.strip():
+            server["url"] = url
         else:
-            server["url"] = config["url"]
+            raise ManifestError(
+                f"enabled MCP adapter {adapter['id']} requires a valid command or url"
+            )
         servers[adapter["id"]] = server
     return {"schema": MCP_CONFIG_SCHEMA, "mcpServers": servers}
 
@@ -575,10 +593,20 @@ def _redact_manifest(manifest: Mapping[str, Any]) -> dict[str, Any]:
         *redacted["orchestration"]["orchestrators"],
     ]
     for item in inventory:
+        provenance_url = item["provenance"]["reference_url"]
+        item["provenance"]["reference_url"] = _strip_url_secrets(provenance_url)
+        config_url = item["config"].get("url")
+        if isinstance(config_url, str):
+            item["config"]["url"] = _strip_url_secrets(config_url)
         env = item["config"].get("env")
         if isinstance(env, dict):
             item["config"]["env"] = {key: "<redacted>" for key in env}
     return redacted
+
+
+def _strip_url_secrets(url: str) -> str:
+    parsed = urlsplit(url)
+    return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
 
 
 _DASHBOARD_HTML = """<!doctype html>
@@ -628,29 +656,92 @@ def create_dashboard_server(
     path = Path(manifest_path)
 
     class DashboardHandler(BaseHTTPRequestHandler):
+        def end_headers(self) -> None:
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("X-Frame-Options", "DENY")
+            self.send_header("Referrer-Policy", "no-referrer")
+            self.send_header(
+                "Content-Security-Policy",
+                "default-src 'none'; style-src 'unsafe-inline'; "
+                "script-src 'unsafe-inline'; connect-src 'self'; "
+                "frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+            )
+            super().end_headers()
+
         def _send_json(self, payload: Mapping[str, Any], status: int = 200) -> None:
             body = json.dumps(payload, indent=2, ensure_ascii=False).encode("utf-8")
             self.send_response(status)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))
-            self.send_header("Cache-Control", "no-store")
-            self.send_header("X-Content-Type-Options", "nosniff")
             self.end_headers()
             self.wfile.write(body)
 
+        def _accept_loopback_host(self) -> bool:
+            host_headers = self.headers.get_all("Host", [])
+            if len(host_headers) != 1 or not host_headers[0]:
+                self._send_json(
+                    {
+                        "schema": "soft-ue.app-harness.error.v1",
+                        "error": "invalid_host",
+                        "message": "a valid Host header is required",
+                    },
+                    status=400,
+                )
+                return False
+
+            match = re.fullmatch(
+                r"(?P<hostname>[A-Za-z0-9.-]+)(?::(?P<port>[0-9]{1,5}))?",
+                host_headers[0],
+            )
+            if match is None:
+                self._send_json(
+                    {
+                        "schema": "soft-ue.app-harness.error.v1",
+                        "error": "invalid_host",
+                        "message": "the Host header is malformed",
+                    },
+                    status=400,
+                )
+                return False
+
+            hostname = match.group("hostname").lower()
+            port_text = match.group("port")
+            if port_text is not None and not 1 <= int(port_text) <= 65535:
+                self._send_json(
+                    {
+                        "schema": "soft-ue.app-harness.error.v1",
+                        "error": "invalid_host",
+                        "message": "the Host header contains an invalid port",
+                    },
+                    status=400,
+                )
+                return False
+            if (
+                hostname in {"127.0.0.1", "localhost"}
+                and port_text is not None
+                and int(port_text) == self.server.server_port
+            ):
+                return True
+            self._send_json(
+                {
+                    "schema": "soft-ue.app-harness.error.v1",
+                    "error": "forbidden_host",
+                    "message": "dashboard requests must use its loopback host and bound port",
+                },
+                status=403,
+            )
+            return False
+
         def do_GET(self) -> None:  # noqa: N802 - stdlib handler API
+            if not self._accept_loopback_host():
+                return
             route = self.path.partition("?")[0]
             if route == "/":
                 body = _DASHBOARD_HTML.encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.send_header("Content-Length", str(len(body)))
-                self.send_header("Cache-Control", "no-store")
-                self.send_header("X-Content-Type-Options", "nosniff")
-                self.send_header(
-                    "Content-Security-Policy",
-                    "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'",
-                )
                 self.end_headers()
                 self.wfile.write(body)
                 return
@@ -692,6 +783,8 @@ def create_dashboard_server(
             )
 
         def _reject_mutation(self) -> None:
+            if not self._accept_loopback_host():
+                return
             self._send_json(
                 {
                     "schema": "soft-ue.app-harness.error.v1",

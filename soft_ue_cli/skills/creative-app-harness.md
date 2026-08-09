@@ -16,6 +16,7 @@ servers.
 2. Prefer a structured, application-specific MCP tool whenever it can express the operation.
    Structured calls provide inspectable inputs, results, and stable object identifiers.
 3. Use Cua Driver computer use only when the structured adapter lacks the required UI action.
+   Cua Driver exposes those visual computer-use tools through its `cua-driver mcp` transport.
    Bound each visual action, record what was clicked or typed, and return to structured
    inspection as soon as possible.
 4. Never infer success from a click, a lack of errors, or an agent's narrative. Capture evidence.
@@ -59,5 +60,5 @@ For every durable checkpoint retain:
 - visual capture when appearance matters;
 - Auditor decision and remaining gaps.
 
-Generate client configuration with `soft-ue-cli harness mcp-config`. It contains enabled MCP
-adapters only: computer-use drivers and orchestrators are intentionally excluded.
+Generate client configuration with `soft-ue-cli harness mcp-config`. It contains every enabled
+MCP transport, including Cua Driver when enabled. Orchestrators are intentionally excluded.
