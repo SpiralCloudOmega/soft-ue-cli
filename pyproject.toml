@@ -52,6 +52,7 @@ packages = ["soft_ue_cli"]
 "soft_ue_cli/skills/replay-changes.md" = "soft_ue_cli/skills/replay-changes.md"
 "soft_ue_cli/skills/test-tools.md" = "soft_ue_cli/skills/test-tools.md"
 "soft_ue_cli/skills/session-protocol.md" = "soft_ue_cli/skills/session-protocol.md"
+"soft_ue_cli/skills/creative-app-harness.md" = "soft_ue_cli/skills/creative-app-harness.md"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

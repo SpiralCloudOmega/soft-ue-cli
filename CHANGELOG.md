@@ -4,6 +4,10 @@ All notable changes to soft-ue-cli will be documented in this file.
 
 ## Unreleased
 
+### Added
+- Added a dependency-free creative-app harness foundation with a versioned adapter manifest, safe initialization, readiness checks, enabled-MCP config generation, and a loopback-only read-only dashboard.
+- Added the `creative-app-harness` skill for structured-MCP-first Manager/Executor/Auditor workflows across creative applications.
+
 ## [1.44.0] - 2026-07-28
 
 ### Added

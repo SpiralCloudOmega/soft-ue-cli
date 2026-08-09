@@ -12,6 +12,15 @@ import sys
 import time
 from pathlib import Path
 
+from .app_harness import (
+    DEFAULT_MANIFEST_PATH,
+    ManifestError,
+    build_status as build_harness_status,
+    generate_mcp_config,
+    initialize_manifest,
+    load_manifest,
+    serve_dashboard,
+)
 from .client import call_tool, call_tool_ex, health_check, record_notices
 from .command_aliases import COMMAND_ALIAS_PREFIXES, REMOVED_COMMAND_MIGRATIONS
 from .diagnostics import (
@@ -236,6 +245,68 @@ def _print_json(data: object) -> None:
         print(text)
     except UnicodeEncodeError:
         print(json.dumps(data, indent=2, ensure_ascii=True))
+
+
+def _harness_error(exc: ManifestError) -> None:
+    _print_json(
+        {
+            "schema": "soft-ue.app-harness.error.v1",
+            "error": "invalid_manifest",
+            "message": str(exc),
+        }
+    )
+    raise SystemExit(1)
+
+
+def cmd_harness_init(args: argparse.Namespace) -> None:
+    try:
+        _print_json(initialize_manifest(args.manifest, force=args.force))
+    except ManifestError as exc:
+        _harness_error(exc)
+
+
+def cmd_harness_status(args: argparse.Namespace) -> None:
+    manifest_path = Path(args.manifest)
+    try:
+        if args.probe_timeout <= 0:
+            raise ManifestError("--probe-timeout must be greater than zero")
+        manifest = load_manifest(manifest_path)
+        _print_json(
+            build_harness_status(
+                manifest,
+                base_dir=manifest_path.parent,
+                health_probe=lambda: health_check(timeout=args.probe_timeout),
+            )
+        )
+    except ManifestError as exc:
+        _harness_error(exc)
+
+
+def cmd_harness_mcp_config(args: argparse.Namespace) -> None:
+    try:
+        _print_json(generate_mcp_config(load_manifest(args.manifest)))
+    except ManifestError as exc:
+        _harness_error(exc)
+
+
+def cmd_harness_serve(args: argparse.Namespace) -> None:
+    try:
+        if not 0 <= args.port <= 65535:
+            raise ManifestError("--port must be between 0 and 65535")
+        if args.probe_timeout <= 0:
+            raise ManifestError("--probe-timeout must be greater than zero")
+        load_manifest(args.manifest)
+    except ManifestError as exc:
+        _harness_error(exc)
+    try:
+        serve_dashboard(
+            args.manifest,
+            port=args.port,
+            open_browser=args.open_browser,
+            health_probe=lambda: health_check(timeout=args.probe_timeout),
+        )
+    except (OSError, ValueError) as exc:
+        _harness_error(ManifestError(f"cannot serve dashboard: {exc}"))
 
 
 def cmd_commands(args: argparse.Namespace) -> None:
@@ -5439,6 +5510,70 @@ def build_parser(*, include_removed: bool = False) -> argparse.ArgumentParser:
         ),
     )
     sub = parser.add_subparsers(dest="command", required=True)
+
+    p_harness = sub.add_parser(
+        "harness",
+        help="Configure and inspect a durable creative-app adapter harness.",
+        description=(
+            "Manage a versioned creative-app adapter inventory and read-only readiness dashboard. "
+            "Status checks never launch configured third-party programs."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    harness_sub = p_harness.add_subparsers(dest="harness_action", required=True)
+
+    def add_harness_manifest_arg(harness_parser: argparse.ArgumentParser) -> None:
+        harness_parser.add_argument(
+            "--manifest",
+            default=str(DEFAULT_MANIFEST_PATH),
+            help=f"Harness manifest path (default: {DEFAULT_MANIFEST_PATH})",
+        )
+
+    p_harness_init = harness_sub.add_parser("init", help="Create the default harness manifest safely.")
+    add_harness_manifest_arg(p_harness_init)
+    p_harness_init.add_argument("--force", action="store_true", help="Replace an existing manifest")
+    p_harness_init.set_defaults(func=cmd_harness_init)
+
+    p_harness_status = harness_sub.add_parser(
+        "status",
+        help="Check adapter configuration and Unreal health without launching programs.",
+    )
+    add_harness_manifest_arg(p_harness_status)
+    p_harness_status.add_argument(
+        "--probe-timeout",
+        type=float,
+        default=2.0,
+        metavar="SEC",
+        help="Unreal health probe timeout in seconds (default: 2)",
+    )
+    p_harness_status.set_defaults(func=cmd_harness_status)
+
+    p_harness_mcp = harness_sub.add_parser(
+        "mcp-config",
+        help="Generate standard mcpServers JSON for enabled MCP adapters.",
+    )
+    add_harness_manifest_arg(p_harness_mcp)
+    p_harness_mcp.set_defaults(func=cmd_harness_mcp_config)
+
+    p_harness_serve = harness_sub.add_parser(
+        "serve",
+        help="Serve the loopback-only read-only harness dashboard.",
+    )
+    add_harness_manifest_arg(p_harness_serve)
+    p_harness_serve.add_argument("--port", type=int, default=8765, help="Loopback port (default: 8765)")
+    p_harness_serve.add_argument(
+        "--open-browser",
+        action="store_true",
+        help="Open the dashboard in the default browser after binding",
+    )
+    p_harness_serve.add_argument(
+        "--probe-timeout",
+        type=float,
+        default=2.0,
+        metavar="SEC",
+        help="Unreal health probe timeout in seconds (default: 2)",
+    )
+    p_harness_serve.set_defaults(func=cmd_harness_serve)
 
     p_commands = sub.add_parser(
         "commands",

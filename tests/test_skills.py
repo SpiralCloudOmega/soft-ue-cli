@@ -33,6 +33,7 @@ def test_list_skills_contains_blueprint_to_cpp():
     assert "author-bp-parity-test" in names
     assert "author-invariant-test" in names
     assert "author-umg" in names
+    assert "creative-app-harness" in names
     assert "author-umg-designer" not in names
     assert "author-umg-workflow" not in names
 
@@ -210,6 +211,21 @@ def test_author_umg_skill_targets_designer_navigation_and_runtime_verification()
 
 def test_session_protocol_skill_is_listed():
     assert "session-protocol" in {skill["name"] for skill in list_skills()}
+
+
+def test_creative_app_harness_skill_documents_routes_and_verification():
+    body = get_skill("creative-app-harness")
+
+    assert body is not None
+    assert "Manager / Executor / Auditor" in body
+    assert "Cua Driver" in body
+    assert "Blender" in body
+    assert "Unity" in body
+    assert "Unreal Engine" in body
+    assert "3ds Max" in body
+    assert "AutoCAD" in body
+    assert "no native 3ds Max bridge" in body
+    assert "no native AutoCAD bridge" in body
 
 def test_session_protocol_skill_states_silence_is_not_consent():
     body = get_skill("session-protocol")

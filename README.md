@@ -4,7 +4,7 @@
 [![Python 3.10+](https://img.shields.io/pypi/pyversions/soft-ue-cli.svg)](https://pypi.org/project/soft-ue-cli/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![AI agents](https://img.shields.io/badge/AI_agents-ready-7c3aed)](#why-soft-ue-cli)
-[![skills](https://img.shields.io/badge/skills-13-84cc16)](#skills-llm-workflow-prompts)
+[![skills](https://img.shields.io/badge/skills-14-84cc16)](#skills-llm-workflow-prompts)
 [![commands](https://img.shields.io/badge/commands-120%2B-f97316)](#complete-command-reference)
 [![MCP](https://img.shields.io/badge/MCP-server-0ea5e9)](#mcp-server-mode)
 [![AI built for coding agents](https://img.shields.io/badge/AI_built_for-coding_agents-6b7280)](#why-soft-ue-cli)
@@ -190,6 +190,25 @@ LLM generates output (e.g. .h/.cpp files) following the skill's rules
 ```
 
 Skills are **markdown files** at `cli/soft_ue_cli/skills/*.md`, shipped as package data in the pip distribution. Each skill is self-contained: workflow instructions, reference tables, example CLI commands, and verification test cases. The CLI discovers them via `skills list` / `skills get`. When running as an MCP server, the same files are exposed via the `prompts/list` and `prompts/get` protocol.
+
+### Creative App Harness
+
+The dependency-free harness foundation catalogs structured Unreal, Blender, and Unity MCP
+adapters alongside Cua computer use and LongHorizon orchestration. It only validates configuration
+and reports readiness; it never starts external applications or agents.
+
+```bash
+soft-ue-cli harness init
+soft-ue-cli harness status
+soft-ue-cli harness mcp-config
+soft-ue-cli harness serve --open-browser
+```
+
+The default manifest is `.soft-app-harness/harness.json`. External adapters are disabled until
+configured. `mcp-config` includes enabled MCP adapters only, while the local dashboard binds to
+`127.0.0.1` and exposes read-only manifest/status views. See
+`soft-ue-cli skills get creative-app-harness` for the structured-MCP-first
+Manager/Executor/Auditor workflow.
 
 ### Test Workflow
 
@@ -587,6 +606,7 @@ Skills are markdown prompts that teach an LLM client how to perform complex mult
 |-------|-------------|
 | `blueprint-to-cpp` | Generate C++ `.h`/`.cpp` from a Blueprint asset -- Layer 1 (class scaffolding) + Layer 2 (graph logic translation) |
 | `author-umg` | Turn a UI concept into editable UMG Designer trees, stable widget-name navigation contracts, PIE interaction checks, and layout/visual comparison evidence |
+| `creative-app-harness` | Coordinate durable multi-app work with structured MCP adapters first, bounded computer-use fallback, evidence capture, and independent audit |
 | `level-from-image` | Populate a UE level from a reference image -- analyzes the image, maps scene elements to project assets, batch-places actors, then iterates with visual feedback (viewport screenshots) |
 | `replay-changes` | Walk the binary-asset conflict recovery flow for Git or Perforce: extract base/local/remote revisions, inspect offline diffs, sync the incoming binary, and replay the wanted local edits manually |
 | `test-tools` | Run the exhaustive live integration test script across CLI and MCP modes, including offline `.uasset` smoke checks against a generated Blueprint |

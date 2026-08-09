@@ -50,6 +50,7 @@ EXCLUDED_COMMANDS: frozenset[str] = frozenset({
     "blueprint",
     "capture",
     "cloth",
+    "harness",
     "umg",
     "metasound",
     "mutable",
@@ -58,6 +59,10 @@ EXCLUDED_COMMANDS: frozenset[str] = frozenset({
     "skills",
     "mcp-serve",
     "statetree",
+})
+
+EXCLUDED_MCP_TOOLS: frozenset[str] = frozenset({
+    "harness serve",
 })
 
 # Commands executed client-side (no bridge call). Their existing cmd_* handlers
@@ -73,6 +78,9 @@ CLIENT_SIDE_COMMANDS: frozenset[str] = frozenset({
     "submit-testimonial",
     "request-feature",
     "config",
+    "harness init",
+    "harness status",
+    "harness mcp-config",
 } | {_canonical_name(command) for command in REMOVED_COMMAND_MIGRATIONS.values()} | set(REMOVED_COMMAND_MIGRATIONS))
 
 # Per-tool schema overrides. Merged into auto-generated schemas after extraction.
@@ -654,7 +662,8 @@ def extract_tools() -> list[dict[str, Any]]:
         if cmd_name in EXCLUDED_COMMANDS:
             if _first_subparsers_action(sub_parser) is not None:
                 for leaf_name, leaf_parser, leaf_description in _iter_nested_leaf_commands(sub_parser, (cmd_name,)):
-                    tools.append(_tool_def(leaf_name, leaf_parser, leaf_description))
+                    if leaf_name not in EXCLUDED_MCP_TOOLS:
+                        tools.append(_tool_def(leaf_name, leaf_parser, leaf_description))
             continue
 
         tools.append(_tool_def(cmd_name, sub_parser, choice_help.get(cmd_name, "")))
