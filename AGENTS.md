@@ -46,6 +46,7 @@ soft_ue_cli/            # Python package
 ├── command_aliases.py  # Alias prefixes and removed-command migrations
 ├── mcp_server.py       # MCP server mode (soft-ue-cli mcp-serve)
 ├── mcp_schema.py       # MCP tool schema generation
+├── app_harness.py      # Creative-app orchestration harness: manifest config and read-only observability
 ├── discovery.py        # Bridge server URL/port discovery
 ├── diagnostics.py      # Handoff reports, build-log/P4 summaries, data-file validation
 ├── runtime_binary.py   # Packaged-bridge readiness and binary install/update plans
