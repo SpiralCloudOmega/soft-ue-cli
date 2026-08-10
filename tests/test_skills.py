@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 
 from soft_ue_cli.skills import get_skill, list_skills
 from soft_ue_cli.__main__ import build_parser, cmd_skills
+from tests.repo_paths import cli_root, skills_root
 
 # -- list_skills ---------------------------------------------------------------
 
@@ -293,7 +292,7 @@ def test_session_protocol_skill_separates_derived_from_declared():
 
 def test_all_skills_have_required_frontmatter():
     """Every .md skill file must have name, description, and version in frontmatter."""
-    skills_dir = Path(__file__).parents[2] / "cli" / "soft_ue_cli" / "skills"
+    skills_dir = skills_root()
     for md_file in skills_dir.glob("*.md"):
         text = md_file.read_text(encoding="utf-8")
         assert text.startswith("---"), f"{md_file.name} missing frontmatter"
@@ -346,18 +345,12 @@ def test_every_skill_file_is_force_included_in_the_wheel():
     # installed copy of the package would send this test to the wrong tree.
     # The monorepo keeps these under cli/, the synced public repo at its root,
     # and the two layouts sit at different depths — so search rather than index.
-    cli_root = next(
-        (d for d in Path(__file__).parents
-         for d in (d / "cli", d)
-         if (d / "pyproject.toml").exists() and (d / "soft_ue_cli" / "skills").is_dir()),
-        None,
-    )
-    assert cli_root is not None, "could not locate the CLI package root from this test file"
+    root = cli_root()
 
-    on_disk = {p.name for p in (cli_root / "soft_ue_cli" / "skills").glob("*.md")}
-    pyproject = (cli_root / "pyproject.toml").read_text(encoding="utf-8")
+    on_disk = {p.name for p in (root / "soft_ue_cli" / "skills").glob("*.md")}
+    pyproject = (root / "pyproject.toml").read_text(encoding="utf-8")
 
-    assert on_disk, f"no skill files found under {cli_root / 'soft_ue_cli' / 'skills'}"
+    assert on_disk, f"no skill files found under {root / 'soft_ue_cli' / 'skills'}"
 
     missing = sorted(
         name for name in on_disk

@@ -4,23 +4,12 @@ from __future__ import annotations
 
 import sys
 import tomllib
-from pathlib import Path
+
+from tests.repo_paths import cli_root, repo_root
 
 
-def _repo_root() -> Path:
-    for parent in Path(__file__).resolve().parents:
-        if (parent / "cli" / "pyproject.toml").exists():
-            return parent
-        if (parent / "pyproject.toml").exists() and (parent / "soft_ue_cli").exists():
-            return parent
-    raise AssertionError("Could not locate repository root")
-
-
-def _cli_root() -> Path:
-    root = _repo_root()
-    if (root / "cli" / "pyproject.toml").exists():
-        return root / "cli"
-    return root
+_repo_root = repo_root
+_cli_root = cli_root
 
 
 def test_project_readme_metadata_points_at_public_readme():

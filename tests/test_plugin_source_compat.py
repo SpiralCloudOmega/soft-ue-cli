@@ -1,8 +1,7 @@
-from pathlib import Path
+from tests.repo_paths import plugin_root
 
 
-ROOT = Path(__file__).resolve().parents[2]
-PLUGIN_SOURCE = ROOT / "plugin" / "SoftUEBridge" / "Source"
+PLUGIN_SOURCE = plugin_root() / "Source"
 
 
 def _read(relative_path: str) -> str:

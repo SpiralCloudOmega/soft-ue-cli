@@ -5,40 +5,23 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from tests.repo_paths import cli_root, plugin_root, repo_root
+
 
 def _repo_root() -> Path:
-    for parent in Path(__file__).resolve().parents:
-        pyproject = parent / "cli" / "pyproject.toml"
-        if pyproject.exists():
-            return parent
-        exported_pyproject = parent / "pyproject.toml"
-        if exported_pyproject.exists() and (parent / "soft_ue_cli").exists():
-            return parent
-    raise AssertionError("Could not locate repository root")
+    return repo_root()
 
 
 def _descriptor_path() -> Path:
-    root = _repo_root()
-    monorepo_path = root / "plugin" / "SoftUEBridge" / "SoftUEBridge.uplugin"
-    if monorepo_path.exists():
-        return monorepo_path
-    return root / "soft_ue_cli" / "plugin_data" / "SoftUEBridge" / "SoftUEBridge.uplugin"
+    return plugin_root() / "SoftUEBridge.uplugin"
 
 
 def _plugin_source_path(relative: str) -> Path:
-    root = _repo_root()
-    monorepo_path = root / "plugin" / "SoftUEBridge" / relative
-    if monorepo_path.exists():
-        return monorepo_path
-    return root / "soft_ue_cli" / "plugin_data" / "SoftUEBridge" / relative
+    return plugin_root() / relative
 
 
 def _plugin_root() -> Path:
-    root = _repo_root()
-    monorepo_path = root / "plugin" / "SoftUEBridge"
-    if monorepo_path.exists():
-        return monorepo_path
-    return root / "soft_ue_cli" / "plugin_data" / "SoftUEBridge"
+    return plugin_root()
 
 
 def test_editor_dependency_plugins_are_editor_target_only():
@@ -397,7 +380,7 @@ def test_bridge_registry_remove_tools_does_not_shadow_singleton_instance():
 
 
 def test_agent_guide_warns_new_tools_against_static_registration_macro():
-    guide = Path(__file__).parents[2].joinpath("AGENTS.md").read_text(encoding="utf-8")
+    guide = (_repo_root() / "AGENTS.md").read_text(encoding="utf-8")
 
     assert "Do not use REGISTER_BRIDGE_TOOL" in guide
     assert "RegisterToolClass" in guide
@@ -962,7 +945,7 @@ def test_bridge_health_includes_process_identity_for_restart_detection():
 
 
 def test_agent_guide_requires_deferred_registration_for_new_uclass_tools():
-    guide = Path(__file__).parents[2].joinpath("AGENTS.md").read_text(encoding="utf-8")
+    guide = (_repo_root() / "AGENTS.md").read_text(encoding="utf-8")
 
     assert "OnPostEngineInit" in guide
     assert "newly added UCLASS" in guide
@@ -1220,7 +1203,7 @@ def test_set_node_position_supports_customizable_object_graphs():
 
 
 def test_live_smoke_skill_expects_slot_wiring_macro():
-    content = (_repo_root() / "cli" / "soft_ue_cli" / "skills" / "test-tools.md").read_text(encoding="utf-8")
+    content = (cli_root() / "soft_ue_cli" / "skills" / "test-tools.md").read_text(encoding="utf-8")
 
     assert "wire-customizable-object-slot-from-table" in content
     assert "run-python-script argv args" in content
